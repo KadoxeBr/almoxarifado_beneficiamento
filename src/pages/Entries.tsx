@@ -37,8 +37,7 @@ export function Entries() {
 
   React.useEffect(() => {
     sheetsService.getProducts().then(setProducts);
-    // In a real app, we'd fetch suppliers too
-    setSuppliers([{ id: 'FORN-001', nome: 'METALURGICA SILVA LTDA' }, { id: 'FORN-002', nome: 'AUTO PECAS CENTRAL' }]);
+    sheetsService.getSuppliers().then(setSuppliers);
   }, []);
 
   React.useEffect(() => {

@@ -42,11 +42,10 @@ export function Exits() {
 
   React.useEffect(() => {
     sheetsService.getProducts().then(setProducts);
-    // Mocking other data
-    setEmployees([{ id: 'E-001', nome: 'JOAO SILVA', setor: 'MANUTENCAO' }, { id: 'E-002', nome: 'MARIA SOUZA', setor: 'PRODUCAO' }]);
-    setSectors([{ id: 'S-001', nome: 'MANUTENCAO' }, { id: 'S-002', nome: 'PRODUCAO' }]);
-    setCostCenters([{ id: 'CC-001', nome: 'GERAL' }, { id: 'CC-002', nome: 'MAQUINARIA' }]);
-    setMachines([{ id: 'M-001', nome: 'EMPILHADEIRA TOYOTA' }, { id: 'M-002', nome: 'TORNO MECANICO' }]);
+    sheetsService.getEmployees().then(setEmployees);
+    sheetsService.getSectors().then(setSectors);
+    sheetsService.getCostCenters().then(setCostCenters);
+    sheetsService.getMachines().then(setMachines);
   }, []);
 
   React.useEffect(() => {
