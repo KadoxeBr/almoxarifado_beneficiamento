@@ -22,6 +22,7 @@ import {
   ArrowUpFromDot, 
   Calendar,
   Download,
+  FileSpreadsheet,
   Filter,
   Search,
   Trash2,
@@ -29,13 +30,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { sheetsService } from '../services/sheetsService';
-import { Movement, Employee } from '../types';
+import { Movement, Employee, Product } from '../types';
 import { cn } from '../lib/utils';
 import { format, parseISO } from 'date-fns';
 
 export function Reports() {
   const [movements, setMovements] = React.useState<Movement[]>([]);
   const [employees, setEmployees] = React.useState<Employee[]>([]);
+  const [products, setProducts] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [filterType, setFilterType] = React.useState<string>('');
   const [filterEmployee, setFilterEmployee] = React.useState<string>('');
@@ -44,12 +46,14 @@ export function Reports() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [movsData, empData] = await Promise.all([
+      const [movsData, empData, prodData] = await Promise.all([
         sheetsService.getMovements(),
-        sheetsService.getEmployees()
+        sheetsService.getEmployees(),
+        sheetsService.getProducts()
       ]);
       setMovements(movsData);
       setEmployees(empData);
+      setProducts(prodData);
     } catch (error) {
       console.error(error);
     } finally {
@@ -81,9 +85,47 @@ export function Reports() {
     const matchesType = !filterType || m.tipo === filterType;
     const matchesEmployee = !filterEmployee || m.funcionario === filterEmployee;
     const search = searchProduct.toLowerCase();
-    const matchesProduct = !searchProduct || (m.idProduto ? String(m.idProduto).toLowerCase().includes(search) : false);
+    const productDesc = products.find(p => p.id === m.idProduto)?.desc || '';
+    const matchesProduct = !searchProduct || 
+      (m.idProduto ? String(m.idProduto).toLowerCase().includes(search) : false) ||
+      productDesc.toLowerCase().includes(search);
     return matchesType && matchesEmployee && matchesProduct;
   });
+
+  const handleExportCSV = () => {
+    if (filteredMovements.length === 0) {
+      toast.error('Nenhum dado para exportar.');
+      return;
+    }
+
+    const headers = ['Data', 'Tipo', 'Código Produto', 'Descrição Produto', 'Quantidade', 'Responsável/Fornecedor', 'Setor', 'Total (R$)'];
+    const csvContent = [
+      headers.join(';'),
+      ...filteredMovements.map(m => {
+        const productDesc = products.find(p => p.id === m.idProduto)?.desc || 'PRODUTO DESCONHECIDO';
+        return [
+          m.data,
+          m.tipo,
+          m.idProduto,
+          `"${productDesc}"`,
+          m.quantidade,
+          `"${m.funcionario || m.fornecedor || ''}"`,
+          `"${m.setor || ''}"`,
+          m.total.toFixed(2).replace('.', ',')
+        ].join(';');
+      })
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `relatorio_movimentacoes_${format(new Date(), 'dd-MM-yyyy_HHmm')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Relatório exportado com sucesso!');
+  };
 
   // Data for charts
   const typeData = [
@@ -114,10 +156,19 @@ export function Reports() {
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Relatórios</h2>
           <p className="text-slate-500 uppercase text-[9px] tracking-[0.4em] font-bold mt-1">Auditoria e Análise de Fluxo</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-blue-900/20">
-          <Download className="w-4 h-4" />
-          Exportar PDF
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Exportar CSV
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-blue-900/20">
+            <Download className="w-4 h-4" />
+            Exportar PDF
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -221,8 +272,8 @@ export function Reports() {
                 className="bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs outline-none focus:ring-1 focus:ring-brand-orange text-slate-900 w-40 md:w-48 appearance-none"
               >
                 <option value="">Todos Funcionários</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.nome}>{emp.nome}</option>
+                {employees.map((emp, index) => (
+                  <option key={`${emp.id || emp.nome}-${index}`} value={emp.nome}>{emp.nome}</option>
                 ))}
               </select>
             </div>
@@ -270,7 +321,14 @@ export function Reports() {
                         {m.tipo}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs text-slate-900 font-bold">{m.idProduto}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-mono text-[10px] text-brand-blue font-bold uppercase">{m.idProduto}</span>
+                        <span className="text-xs text-slate-900 font-bold uppercase">
+                          {products.find(p => p.id === m.idProduto)?.desc || 'PRODUTO DESCONHECIDO'}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-center font-bold text-slate-900">{m.quantidade}</td>
                     <td className="px-6 py-4 text-xs text-slate-600 font-bold uppercase">{m.funcionario}</td>
                     <td className="px-6 py-4 text-xs text-slate-500 font-bold uppercase">{m.setor}</td>

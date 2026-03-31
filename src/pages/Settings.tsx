@@ -304,8 +304,8 @@ export function Settings() {
                       className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 outline-none focus:ring-1 focus:ring-brand-orange"
                     >
                       <option value="">Selecione um setor</option>
-                      {sectors.map(s => (
-                        <option key={s.id} value={s.nome}>{s.nome}</option>
+                      {sectors.map((s, index) => (
+                        <option key={`${s.id || s.nome}-${index}`} value={s.nome}>{s.nome}</option>
                       ))}
                     </select>
                   </div>

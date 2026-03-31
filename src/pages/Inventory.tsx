@@ -4,9 +4,9 @@
  */
 
 import React from 'react';
-import { Search, Plus, Package, Edit2, Trash2, X } from 'lucide-react';
+import { Search, Plus, Package, Edit2, Trash2, X, History } from 'lucide-react';
 import { sheetsService } from '../services/sheetsService';
-import { Product } from '../types';
+import { Product, Movement } from '../types';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 
@@ -17,6 +17,9 @@ export function Inventory() {
   const [isAdding, setIsAdding] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [selectedProductHistory, setSelectedProductHistory] = React.useState<Product | null>(null);
+  const [productMovements, setProductMovements] = React.useState<Movement[]>([]);
+  const [loadingHistory, setLoadingHistory] = React.useState(false);
   const [newProduct, setNewProduct] = React.useState<Partial<Product>>({
     id: '', desc: '', un: 'UN', saldo: 0, estoqueMin: 0, ultimoCusto: 0
   });
@@ -99,6 +102,20 @@ export function Inventory() {
       }
     } catch (error) {
       toast.error('Erro de conexão.');
+    }
+  };
+
+  const handleViewHistory = async (product: Product) => {
+    setSelectedProductHistory(product);
+    setLoadingHistory(true);
+    try {
+      const allMovements = await sheetsService.getMovements();
+      const filtered = allMovements.filter(m => m.idProduto === product.id);
+      setProductMovements(filtered.reverse());
+    } catch (error) {
+      toast.error('Erro ao carregar histórico.');
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -297,6 +314,13 @@ export function Inventory() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
+                          onClick={() => handleViewHistory(p)}
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                          title="Ver Histórico"
+                        >
+                          <History className="w-4 h-4" />
+                        </button>
+                        <button 
                           onClick={() => handleEditClick(p)}
                           className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-md transition-colors"
                           title="Editar"
@@ -319,6 +343,76 @@ export function Inventory() {
           </table>
         </div>
       </div>
+
+      {selectedProductHistory && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Histórico de Movimentações</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  <span className="font-mono text-brand-blue font-bold">{selectedProductHistory.id}</span> - {selectedProductHistory.desc}
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedProductHistory(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1">
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-pulse flex flex-col items-center gap-4">
+                    <div className="w-8 h-8 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Buscando histórico...</p>
+                  </div>
+                </div>
+              ) : productMovements.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-slate-500 font-medium">Nenhuma movimentação registrada para este produto.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-[10px] text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3">Data</th>
+                        <th className="px-4 py-3">Tipo</th>
+                        <th className="px-4 py-3 text-center">Qtd</th>
+                        <th className="px-4 py-3">Responsável/Fornecedor</th>
+                        <th className="px-4 py-3">Setor</th>
+                        <th className="px-4 py-3 text-right">Total (R$)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {productMovements.map((m, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 text-xs text-slate-600 font-medium whitespace-nowrap">{m.data}</td>
+                          <td className="px-4 py-3">
+                            <span className={cn(
+                              "px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest",
+                              m.tipo === 'ENTRADA' ? "bg-brand-blue/10 text-brand-blue" : "bg-brand-orange/10 text-brand-orange"
+                            )}>
+                              {m.tipo}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-slate-900">{m.quantidade}</td>
+                          <td className="px-4 py-3 text-xs text-slate-700 font-semibold uppercase">{m.funcionario || m.fornecedor || '-'}</td>
+                          <td className="px-4 py-3 text-xs text-slate-500 font-semibold uppercase">{m.setor || '-'}</td>
+                          <td className="px-4 py-3 text-right font-mono text-xs text-slate-900">R$ {m.total.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
